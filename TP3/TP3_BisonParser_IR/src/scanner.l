@@ -1,153 +1,177 @@
-%option noyywrap nodefault nounput noinput yylineno
+%option noyywrap nodefault nounput yylineno
 
 %{
-#include <cctype>
-#include <cstdint>
 #include <string>
 #include <vector>
 #include <stdexcept>
 #include "tokens.hpp"
-#include "parser.tab.hpp" // token ids and yystype from bison
+#include <cstdio>
 
-/* yylval is defined in parser.tab.cpp */
-extern YYSTYPE yylval;
-
-/* scanner api used by main.cpp */
+// Match Flex-generated declarations (C++ linkage) DO NOT EDIT
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 int yylex(void);
 void yyrestart(FILE*);
 YY_BUFFER_STATE yy_scan_string(const char* str);
 void yy_delete_buffer(YY_BUFFER_STATE b);
 
+static std::vector<Token>* g_tokens = nullptr;
+static YY_BUFFER_STATE g_buf = nullptr;
+static std::vector<std::string> g_errors;
 static int g_comment_line = 0;
 
-/* merged: our tp2 error message format, thrown at once because bison pulls one token at a time */
-[[noreturn]] static void lex_error(int line, const std::string& msg) {
-    throw std::runtime_error("lexical error, line " + std::to_string(line) + ": " + msg);
+static void emit(TokenType type, const std::string& value) {
+    g_tokens->push_back(Token{type, value, yylineno});
 }
 
-/* merged: our tp2 parse_int_literal, false when the value exceeds int64 */
-static bool parse_int_literal(const std::string& text, int64_t& out) {
-    int base = 10;
-    size_t i = 0;
-    if (text.size() > 1 && (text[1] == 'x' || text[1] == 'X')) { base = 16; i = 2; }
-    else if (text.size() > 1 && (text[1] == 'b' || text[1] == 'B')) { base = 2; i = 2; }
-
-    uint64_t value = 0;
-    for (; i < text.size(); i++) {
-        char c = text[i];
-        if (c == '_') continue;
-        uint64_t d = std::isdigit((unsigned char)c) ? c - '0' : std::tolower((unsigned char)c) - 'a' + 10;
-        if (value > (uint64_t(INT64_MAX) - d) / base) return false;
-        value = value * base + d;
-    }
-    out = (int64_t)value;
-    return true;
+static void lex_error(int line, const std::string& msg) {
+    g_errors.push_back("lexical error, line " + std::to_string(line) + ": " + msg);
 }
+
+// throws once with every lexical error found
+static void raise_errors() {
+    if (g_errors.empty()) return;
+    std::string all;
+    for (const auto& e : g_errors) all += e + "\n";
+    all += std::to_string(g_errors.size()) + " lexical error(s)";
+    g_errors.clear();
+    throw std::runtime_error(all);
+}
+
+void scan_to_tokens(std::vector<Token>& out) {
+    g_tokens = &out;
+    yylineno = 1;
+    yyrestart(nullptr);
+    yylex();
+    raise_errors();
+}
+
+void scan_string_to_tokens(const std::string& src, std::vector<Token>& out) {
+    g_tokens = &out;
+    yylineno = 1;
+    g_buf = yy_scan_string(src.c_str());
+    yylex();
+    yy_delete_buffer(g_buf);
+    g_buf = nullptr;
+    raise_errors();
+}
+
 %}
-
-DIGIT      [0-9]
-ID_START   [A-Za-z_]
-ID_CONT    [A-Za-z0-9_]
-WS         [ \t\r\f]+
-NL         [\n]
-
-/* merged: our tp2 literal forms */
-HEX_DIGIT  [0-9A-Fa-f]
-BIN_DIGIT  [01]
-DECIMAL    {DIGIT}(_?{DIGIT})*
-HEX        0[xX]{HEX_DIGIT}(_?{HEX_DIGIT})*
-BINARY     0[bB]{BIN_DIGIT}(_?{BIN_DIGIT})*
-ESCAPE     \\[ntrfb"\\]
 
 %x COMMENT
 
+DIGIT       [0-9]
+HEX_DIGIT   [0-9A-Fa-f]
+BIN_DIGIT   [01]
+LETTER      [A-Za-z]
+
+DECIMAL     {DIGIT}(_?{DIGIT})*
+HEX         0[xX]{HEX_DIGIT}(_?{HEX_DIGIT})*
+BINARY      0[bB]{BIN_DIGIT}(_?{BIN_DIGIT})*
+WORD        ({LETTER}|_)({LETTER}|{DIGIT}|_)*
+ESCAPE      \\[ntrfb"\\]
+
 %%
 
-"#"[^\n]* ; /* comment */
+[ \t\r\f]+              ;
+\n                      ;
+"//"[^\n]*              ;
 
- /* merged: our tp2 line and block comments, next to his # comments */
-"//"[^\n]*               ;
-"/*"                     { g_comment_line = yylineno; BEGIN(COMMENT); }
-<COMMENT>"*/"            { BEGIN(INITIAL); }
-<COMMENT>[^*\n]+         ;
-<COMMENT>"*"             ;
-<COMMENT>\n              ;
-<COMMENT><<EOF>>         { BEGIN(INITIAL); lex_error(g_comment_line, "unterminated block comment"); }
+"/*"                    { g_comment_line = yylineno; BEGIN(COMMENT); }
+<COMMENT>"*/"           { BEGIN(INITIAL); }
+<COMMENT>[^*\n]+        ;
+<COMMENT>"*"            ;
+<COMMENT>\n             ;
+<COMMENT><<EOF>>        {
+                            lex_error(g_comment_line, "unterminated block comment");
+                            BEGIN(INITIAL);
+                            emit(TokenType::End, "END");
+                            return 0;
+                        }
 
- /* merged: our tp2 string checks, his token return */
-\"([^"\\\n]|{ESCAPE})*\" {
-    yylval.token = Token{TokenType::String, std::string(yytext + 1, yyleng - 2), yylineno};
-    return T_STRING;
-}
-\"([^"\\\n]|\\.)*\"      { lex_error(yylineno, std::string("invalid escape in string ") + yytext); }
-\"([^"\\\n]|\\.)*        { lex_error(yylineno, "unterminated string"); }
+"int"                   { emit(TokenType::Int, yytext); }
+"bool"                  { emit(TokenType::Bool, yytext); }
+"const"                 { emit(TokenType::Const, yytext); }
+"true"                  { emit(TokenType::True, yytext); }
+"false"                 { emit(TokenType::False, yytext); }
+"if"                    { emit(TokenType::If, yytext); }
+"else"                  { emit(TokenType::Else, yytext); }
+"while"                 { emit(TokenType::While, yytext); }
+"do"                    { emit(TokenType::Do, yytext); }
+"for"                   { emit(TokenType::For, yytext); }
+"break"                 { emit(TokenType::Break, yytext); }
+"continue"              { emit(TokenType::Continue, yytext); }
+"print"                 { emit(TokenType::Print, yytext); }
+"prints"                { emit(TokenType::Prints, yytext); }
+"read"                  { emit(TokenType::Read, yytext); }
 
+{WORD}                  { emit(TokenType::Identifier, yytext); }
 
-"=="|">="|"<="|"!="      {
-    yylval.token = Token{TokenType::Comparison,
-                              std::string(yytext, yyleng), yylineno};
-    return T_COMPARISON;
-}
-
-
-"+"                      { return '+'; }
-"-"                      { return '-'; }
-"*"                      { return '*'; }
-"/"                      { return '/'; }
-"="                      { return T_ASSIGN; }
-"("                      { return T_LPAREN; }
-")"                      { return T_RPAREN; }
-"{"                      { return T_LBRACE; }
-"}"                      { return T_RBRACE; }
-";"                      { return T_SEMICOLON; }
-","                      { return ','; }
-
-
-"<"|">"                  {
-    yylval.token = Token{TokenType::Comparison,
-                              std::string(yytext, yyleng), yylineno};
-    return T_COMPARISON;
-}
-
-
-{ID_START}{ID_CONT}* {
-    std::string s(yytext, yyleng);
-
-    if      (s == "if")     return T_IF;
-    else if (s == "else")   return T_ELSE;
-    else if (s == "while")  return T_WHILE;
-    else if (s == "int")    return T_INT;
-    else if (s == "print")  return T_PRINT;
-    else if (s == "prints") return T_PRINTS;
-    else if (s == "string") return T_STRINGKW;
-    else {
-        /* variables are stored with a v prefix */
-        yylval.token = Token{TokenType::Var, "V" + s, yylineno};
-        return T_VAR;
-    }
-}
-
- /* merged: our tp2 hex, binary, separators and range check, his token return */
- /* the value is passed on in decimal so later stages never see a prefix or separator */
 {DECIMAL}|{HEX}|{BINARY} {
-    int64_t value;
-    if (!parse_int_literal(yytext, value))
-        lex_error(yylineno, std::string("integer literal out of range '") + yytext + "'");
-    yylval.token = Token{TokenType::IntLit, std::to_string(value), yylineno};
-    return T_INTLIT;
-}
-{DIGIT}{ID_CONT}*        { lex_error(yylineno, std::string("malformed number '") + yytext + "'"); }
+                            int64_t value;
+                            if (parse_int_literal(yytext, value))
+                                emit(TokenType::IntLit, yytext);
+                            else
+                                lex_error(yylineno, std::string("integer literal out of range '") + yytext + "'");
+                        }
+{DIGIT}({LETTER}|{DIGIT}|_)* {
+                            lex_error(yylineno, std::string("malformed number '") + yytext + "'");
+                        }
 
-{WS}                     ;
-{NL}                     ;
+\"([^"\\\n]|{ESCAPE})*\" { emit(TokenType::String, std::string(yytext + 1, yyleng - 2)); }
+\"([^"\\\n]|\\.)*\"     { lex_error(yylineno, std::string("invalid escape in string ") + yytext); }
+\"([^"\\\n]|\\.)*       { lex_error(yylineno, "unterminated string"); }
 
- /* merged: our tp2 message naming the character, his immediate throw */
-.                        { lex_error(yylineno, std::string("unexpected character '") + yytext + "'"); }
+"<<="                   { emit(TokenType::ShlAssign, yytext); }
+">>="                   { emit(TokenType::ShrAssign, yytext); }
+"+="                    { emit(TokenType::PlusAssign, yytext); }
+"-="                    { emit(TokenType::MinusAssign, yytext); }
+"*="                    { emit(TokenType::StarAssign, yytext); }
+"/="                    { emit(TokenType::SlashAssign, yytext); }
+"%="                    { emit(TokenType::PercentAssign, yytext); }
+"&="                    { emit(TokenType::AndAssign, yytext); }
+"|="                    { emit(TokenType::OrAssign, yytext); }
+"^="                    { emit(TokenType::XorAssign, yytext); }
+"++"                    { emit(TokenType::Increment, yytext); }
+"--"                    { emit(TokenType::Decrement, yytext); }
+"=="                    { emit(TokenType::Eq, yytext); }
+"!="                    { emit(TokenType::Neq, yytext); }
+"<="                    { emit(TokenType::Le, yytext); }
+">="                    { emit(TokenType::Ge, yytext); }
+"<<"                    { emit(TokenType::Shl, yytext); }
+">>"                    { emit(TokenType::Shr, yytext); }
+"&&"                    { emit(TokenType::And, yytext); }
+"||"                    { emit(TokenType::Or, yytext); }
+"**"                    { emit(TokenType::Power, yytext); }
+"="                     { emit(TokenType::Assign, yytext); }
+"<"                     { emit(TokenType::Lt, yytext); }
+">"                     { emit(TokenType::Gt, yytext); }
+"+"                     { emit(TokenType::Plus, yytext); }
+"-"                     { emit(TokenType::Minus, yytext); }
+"*"                     { emit(TokenType::Star, yytext); }
+"/"                     { emit(TokenType::Slash, yytext); }
+"%"                     { emit(TokenType::Percent, yytext); }
+"&"                     { emit(TokenType::BitAnd, yytext); }
+"|"                     { emit(TokenType::BitOr, yytext); }
+"^"                     { emit(TokenType::BitXor, yytext); }
+"~"                     { emit(TokenType::BitNot, yytext); }
+"!"                     { emit(TokenType::Not, yytext); }
 
-<<EOF>>                  {
-    /* 0 tells bison the input is over */
-    return 0;
-}
+"("                     { emit(TokenType::LParen, yytext); }
+")"                     { emit(TokenType::RParen, yytext); }
+"{"                     { emit(TokenType::LBrace, yytext); }
+"}"                     { emit(TokenType::RBrace, yytext); }
+"["                     { emit(TokenType::LBracket, yytext); }
+"]"                     { emit(TokenType::RBracket, yytext); }
+";"                     { emit(TokenType::Semicolon, yytext); }
+","                     { emit(TokenType::Comma, yytext); }
+"?"                     { emit(TokenType::Question, yytext); }
+":"                     { emit(TokenType::Colon, yytext); }
+
+.                       { lex_error(yylineno, std::string("unexpected character '") + yytext + "'"); }
+
+<<EOF>>                 {
+                            emit(TokenType::End, "END");
+                            return 0;
+                        }
 
 %%

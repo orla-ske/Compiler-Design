@@ -1,21 +1,27 @@
-int a, b, c;
-string msg;
-int n = 10;
-a = 1 + 2 * 3;
-b = (a + 4) / 2;
-c = a - b - 1;
-if (a >= b) {
-    prints("a is at least b");
-    {
-        c = c * (a - b);
-    }
-} else {
-    print(b - a);
+// reference example of the course
+int var1;
+int var2;
+var1 = 10;
+var2 = 0;
+while (var1 > var2) {
+    var2 = var2 + 1;
+    var1 = var1 - var2;
+    prints("var1, var2");
+    print(var1);
+    print(var2);
 }
-while (n != 0) {
-    if (n < 5) {
-        print(n);
-    }
-    n = n - 1;
+
+/* extensions of our grammar */
+const int MAX = 1_000;
+int a[5] = {1, 2, 3}, n, mask = 0xFF;
+bool done = false;
+read(n);
+for (int i = 0; i < 5; i++) {
+    if (a[i] & 1 == 0) { continue; }
+    a[i] = a[i] ** 2;
+    if (a[i] > MAX) { break; } else if (a[i] == 4) { a[i] += 1; } else { a[i]--; }
 }
-prints("done");
+int m = n > 0 ? n : -n;
+do { m--; done = m <= 0; } while (!done && m != 0);
+{ int n = 3; print("inner n = ", n); }
+print("m = ", m, ", done = ", done, "\n");
