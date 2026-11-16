@@ -1,0 +1,116 @@
+
+Group 4
+Members: Orlando KODJO | Anshuman Krishna YADAV
+------------------------------------------------
+
+( UPPER_CASE = lexical rules (scanner), CamelCase = syntactic rules (parser) )
+
+( LEXICAL GRAMMAR )
+
+LETTER = "A" | ... | "Z" | "a" | ... | "z" ;
+DIGIT = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+HEX_DIGIT = DIGIT | "A" | ... | "F" | "a" | ... | "f" ;
+BIN_DIGIT = "0" | "1" ;
+CHARACTER = character = letter | digit | symbol | "_" | " " ;
+
+KEYWORD = "int" | "bool" | "const" | "true" | "false" | "if" | "else" | "while" | "do" | "for" | "break" | "continue" | "print" | "prints" | "read" ;
+
+WORD = ( LETTER | "_" ) { LETTER | DIGIT | "_" } ;
+IDENTIFIER = WORD - KEYWORD ;
+
+INTEGER_LITERAL = DECIMAL_LITERAL | HEX_LITERAL | BINARY_LITERAL ;
+DECIMAL_LITERAL = DIGIT { [ "_" ] DIGIT } ;
+HEX_LITERAL = "0" ( "x" | "X" ) HEX_DIGIT { [ "_" ] HEX_DIGIT } ;
+BINARY_LITERAL = "0" ( "b" | "B" ) BIN_DIGIT { [ "_" ] BIN_DIGIT } ;
+BOOL_LITERAL = "true" | "false" ;
+STRING_LITERAL = '"' { STRING_CHAR | ESCAPE } '"' ;
+STRING_CHAR = CHARACTER - ( '"' | "\" ) ;
+ESCAPE = "\" ( "n" | "t" | '"' | "\" | “\r” | “\f” | “\b”) ;
+
+ASSIGN_OP = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+INCDEC_OP = "++" | "--" ;
+EQUALITY_OP = "==" | "!=" ;
+RELATIONAL_OP = "<" | "<=" | ">" | ">=" ;
+SHIFT_OP = "<<" | ">>" ;
+ADDITIVE_OP = "+" | "-" ;
+MULTIPLICATIVE_OP = "*" | "/" | "%" ;
+POWER_OP = "**" ;
+BIT_AND_OP = "&" ;
+BIT_XOR_OP = "^" ; 
+BIT_OR_OP = "|" ;
+AND_OP = "&&" ;
+OR_OP = "||" ;
+NOT_OP = "!" ;
+BIT_NOT_OP = "~" ;
+PUNCTUATION = "(" | ")" | "{" | "}" | "[" | "]" | ";" | "," | "?" | ":" ;
+
+WHITESPACE = " " | ? tab ? | NEWLINE ;
+LINE_COMMENT = "//" { CHARACTER } ( NEWLINE | ? end of file ? ) ;
+BLOCK_COMMENT = "/*" ? any characters not containing "*/" ? "*/" ;
+
+------------------------------------------------
+
+( SYNTACTIC GRAMMAR )
+
+Program = { Statement } ;
+
+Statement = Declaration
+    | SimpleStatement ";"
+    | IfStatement
+    | WhileStatement
+    | DoWhileStatement
+    | ForStatement
+    | BreakStatement
+    | ContinueStatement
+    | PrintStatement
+    | ReadStatement
+    | Block ;
+
+Block = "{" { Statement } "}" ;
+
+Type = "int" | "bool" ;
+Declaration = DeclarationBody ";" ;
+DeclarationBody = [ "const" ] Type InitDeclarator { "," InitDeclarator } ;
+InitDeclarator = IDENTIFIER [ ArraySize ] [ "=" Initializer ] ;
+ArraySize = "[" INTEGER_LITERAL "]" ;
+Initializer = Expression | "{" Expression { "," Expression } "}" ;
+
+LValue = IDENTIFIER [ "[" Expression "]" ] ;
+SimpleStatement = Assignment | IncDec ;
+Assignment = LValue ASSIGN_OP Expression ;
+IncDec = INCDEC_OP LValue | LValue INCDEC_OP ;
+
+IfStatement = "if" "(" Expression ")" Block [ "else" ( Block | IfStatement ) ] ;
+WhileStatement = "while" "(" Expression ")" Block ;
+DoWhileStatement = "do" Block "while" "(" Expression ")" ";" ;
+ForStatement = "for" "(" [ ForInit ] ";" [ Expression ] ";" [ SimpleStatement ] ")" Block ;
+ForInit = DeclarationBody | SimpleStatement ;
+BreakStatement = "break" ";" ;
+ContinueStatement = "continue" ";" ;
+PrintStatement = "print" "(" PrintArgument { "," PrintArgument } ")" ";" | "prints" "(" STRING_LITERAL ")" ";" ;
+PrintArgument = Expression | STRING_LITERAL ;
+ReadStatement = "read" "(" LValue { "," LValue } ")" ";" ;
+
+------------------------------------------------
+
+( EXPRESSIONS, lowest to highest precedence )
+
+Expression = ConditionalExpression ;
+ConditionalExpression = OrExpression [ "?" Expression ":" ConditionalExpression ] ;
+OrExpression = AndExpression { OR_OP AndExpression } ;
+AndExpression = EqualityExpression { AND_OP EqualityExpression } ;
+EqualityExpression = RelationalExpression [ EQUALITY_OP RelationalExpression ] ;
+RelationalExpression = BitOrExpression [ RELATIONAL_OP BitOrExpression ] ;
+BitOrExpression = BitXorExpression { BIT_OR_OP BitXorExpression } ;
+BitXorExpression = BitAndExpression { BIT_XOR_OP BitAndExpression } ;
+BitAndExpression = ShiftExpression { BIT_AND_OP ShiftExpression } ;
+ShiftExpression = AdditiveExpression { SHIFT_OP AdditiveExpression } ;
+AdditiveExpression = MultiplicativeExpression { ADDITIVE_OP MultiplicativeExpression } ;
+MultiplicativeExpression = UnaryExpression { MULTIPLICATIVE_OP UnaryExpression } ;
+UnaryExpression = ( "-" | NOT_OP | BIT_NOT_OP ) UnaryExpression | PowerExpression ;
+PowerExpression = Primary [ POWER_OP UnaryExpression ] ;
+Primary = INTEGER_LITERAL | BOOL_LITERAL | IDENTIFIER [ "[" Expression "]" ] | "(" Expression ")" ;
+
+------------------------------------------------
+
+

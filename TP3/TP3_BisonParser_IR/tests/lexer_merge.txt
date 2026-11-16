@@ -1,0 +1,10 @@
+# his hash comment
+// our line comment
+/* our block comment
+   spanning lines */
+int a, b, c;
+a = 0xFF + 0b1010;
+b = 1_000 * 2;
+c = a /* inline */ - b;
+prints("tab\tquote\"backslash\\");
+print(c);

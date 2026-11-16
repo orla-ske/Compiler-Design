@@ -1,0 +1,22 @@
+# every feature in one program
+int a, b, c;
+string msg;
+int n = 10;
+a = 1 + 2 * 3;
+b = (a + 4) / 2;
+c = a - b - 1;
+if (a >= b) {
+    prints("a is at least b");
+    {
+        c = c * (a - b);
+    }
+} else {
+    print(b - a);
+}
+while (n != 0) {
+    if (n < 5) {
+        print(n);
+    }
+    n = n - 1;
+}
+prints("done");

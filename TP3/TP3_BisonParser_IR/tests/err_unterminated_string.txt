@@ -1,0 +1,2 @@
+int a;
+prints("never closed);

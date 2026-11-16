@@ -1,0 +1,4 @@
+int a;
+/* comment that
+   never ends
+a = 1;

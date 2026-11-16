@@ -1,0 +1,5 @@
+int a, b, c;
+int d;
+string s;
+string t, u;
+int e = 4;

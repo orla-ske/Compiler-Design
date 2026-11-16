@@ -1,0 +1,1 @@
+prints("bad \q escape");

@@ -1,0 +1,8 @@
+int x = 2x;
+int y = 100_ + 1__0 + 0x + 0b12;
+int z = 9223372036854775807;
+int w = 9223372036854775808;
+x = y $ 3;
+print("bad \q escape");
+print("never closed);
+/* never closed

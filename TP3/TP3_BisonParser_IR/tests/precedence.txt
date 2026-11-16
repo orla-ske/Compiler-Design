@@ -1,0 +1,4 @@
+int a, b, c, d, x, y, z;
+x = a + b * c;
+y = a - b - c;
+z = a * b + c / d;

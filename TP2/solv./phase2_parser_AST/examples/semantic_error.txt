@@ -1,0 +1,6 @@
+const int MAX = 10;
+int a[3] = {1, 2, 3, 4};
+bool done = 5;
+MAX = 20;
+if (y > 0) { break; }
+while (a[0]) { a[7] = 1; }
